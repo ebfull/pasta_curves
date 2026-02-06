@@ -23,12 +23,12 @@ proc-macro = true
 
 [dependencies]
 addchain = "0.2"
-num-bigint = "0.3"
+num-bigint = "0.4"
 num-traits = "0.2"
 num-integer = "0.1"
 proc-macro2 = "1"
 quote = "1"
-syn = { version = "1", features = ["full"] }
+syn = { version = "2", features = ["full"] }
 
 [badges]
 maintenance = { status = "passively-maintained" }
