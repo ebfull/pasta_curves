@@ -11,7 +11,9 @@ use lazy_static::lazy_static;
 #[cfg(feature = "bits")]
 use ff::{FieldBits, PrimeFieldBits};
 
-use crate::arithmetic::{adc, mac, sbb, SqrtTableHelpers};
+use crate::arithmetic::{adc, mac, mul_acc, sbb, square_acc, SqrtTableHelpers};
+#[cfg(feature = "deferred")]
+use crate::deferred::{DeferredField, Product};
 
 #[cfg(feature = "sqrt-table")]
 use crate::arithmetic::SqrtTables;
@@ -308,33 +310,8 @@ impl Fq {
     /// Squares this element.
     #[cfg_attr(not(feature = "uninline-portable"), inline)]
     pub const fn square(&self) -> Fq {
-        let (r1, carry) = mac(0, self.0[0], self.0[1], 0);
-        let (r2, carry) = mac(0, self.0[0], self.0[2], carry);
-        let (r3, r4) = mac(0, self.0[0], self.0[3], carry);
-
-        let (r3, carry) = mac(r3, self.0[1], self.0[2], 0);
-        let (r4, r5) = mac(r4, self.0[1], self.0[3], carry);
-
-        let (r5, r6) = mac(r5, self.0[2], self.0[3], 0);
-
-        let r7 = r6 >> 63;
-        let r6 = (r6 << 1) | (r5 >> 63);
-        let r5 = (r5 << 1) | (r4 >> 63);
-        let r4 = (r4 << 1) | (r3 >> 63);
-        let r3 = (r3 << 1) | (r2 >> 63);
-        let r2 = (r2 << 1) | (r1 >> 63);
-        let r1 = r1 << 1;
-
-        let (r0, carry) = mac(0, self.0[0], self.0[0], 0);
-        let (r1, carry) = adc(0, r1, carry);
-        let (r2, carry) = mac(r2, self.0[1], self.0[1], carry);
-        let (r3, carry) = adc(0, r3, carry);
-        let (r4, carry) = mac(r4, self.0[2], self.0[2], carry);
-        let (r5, carry) = adc(0, r5, carry);
-        let (r6, carry) = mac(r6, self.0[3], self.0[3], carry);
-        let (r7, _) = adc(0, r7, carry);
-
-        Fq::montgomery_reduce(r0, r1, r2, r3, r4, r5, r6, r7)
+        let (u, _) = square_acc([0u64; 8], &self.0);
+        Fq::montgomery_reduce(u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7])
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -388,29 +365,8 @@ impl Fq {
     /// Multiplies `rhs` by `self`, returning the result.
     #[cfg_attr(not(feature = "uninline-portable"), inline)]
     pub const fn mul(&self, rhs: &Self) -> Self {
-        // Schoolbook multiplication
-
-        let (r0, carry) = mac(0, self.0[0], rhs.0[0], 0);
-        let (r1, carry) = mac(0, self.0[0], rhs.0[1], carry);
-        let (r2, carry) = mac(0, self.0[0], rhs.0[2], carry);
-        let (r3, r4) = mac(0, self.0[0], rhs.0[3], carry);
-
-        let (r1, carry) = mac(r1, self.0[1], rhs.0[0], 0);
-        let (r2, carry) = mac(r2, self.0[1], rhs.0[1], carry);
-        let (r3, carry) = mac(r3, self.0[1], rhs.0[2], carry);
-        let (r4, r5) = mac(r4, self.0[1], rhs.0[3], carry);
-
-        let (r2, carry) = mac(r2, self.0[2], rhs.0[0], 0);
-        let (r3, carry) = mac(r3, self.0[2], rhs.0[1], carry);
-        let (r4, carry) = mac(r4, self.0[2], rhs.0[2], carry);
-        let (r5, r6) = mac(r5, self.0[2], rhs.0[3], carry);
-
-        let (r3, carry) = mac(r3, self.0[3], rhs.0[0], 0);
-        let (r4, carry) = mac(r4, self.0[3], rhs.0[1], carry);
-        let (r5, carry) = mac(r5, self.0[3], rhs.0[2], carry);
-        let (r6, r7) = mac(r6, self.0[3], rhs.0[3], carry);
-
-        Fq::montgomery_reduce(r0, r1, r2, r3, r4, r5, r6, r7)
+        let (u, _) = mul_acc([0u64; 8], &self.0, &rhs.0);
+        Fq::montgomery_reduce(u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7])
     }
 
     /// Subtracts `rhs` from `self`, returning the result.
@@ -460,6 +416,45 @@ impl Fq {
         let mask = (((self.0[0] | self.0[1] | self.0[2] | self.0[3]) == 0) as u64).wrapping_sub(1);
 
         Fq([d0 & mask, d1 & mask, d2 & mask, d3 & mask])
+    }
+
+}
+
+#[cfg(feature = "deferred")]
+impl DeferredField for Fq {
+    type Accumulator = Product<Fq>;
+
+    #[cfg_attr(not(feature = "uninline-portable"), inline)]
+    fn mul_accumulate(acc: &mut Self::Accumulator, a: &Fq, b: &Fq) {
+        let (limbs, c) = mul_acc(acc.limbs, &a.0, &b.0);
+        acc.limbs = limbs;
+        let (carry, overflow) = acc.carry.overflowing_add(c);
+        debug_assert!(!overflow, "carry overflow: too many accumulated products");
+        acc.carry = carry;
+    }
+
+    #[cfg_attr(not(feature = "uninline-portable"), inline)]
+    fn square_accumulate(acc: &mut Self::Accumulator, a: &Fq) {
+        let (limbs, c) = square_acc(acc.limbs, &a.0);
+        acc.limbs = limbs;
+        let (carry, overflow) = acc.carry.overflowing_add(c);
+        debug_assert!(!overflow, "carry overflow: too many accumulated products");
+        acc.carry = carry;
+    }
+
+    #[cfg_attr(not(feature = "uninline-portable"), inline)]
+    fn reduce(acc: Self::Accumulator) -> Fq {
+        /// 2^448 mod q (little-endian limbs).
+        const B448: [u64; 4] = [
+            0xcc920bb9994a8dd9,
+            0x87a7dcbe1ff6e0d7,
+            0x496d41af7ccfdaa9,
+            0x0ee4537bfffffffc,
+        ];
+        let limbs = acc.partial_reduce(&B448, &R2.0);
+        Fq::montgomery_reduce(
+            limbs[0], limbs[1], limbs[2], limbs[3], limbs[4], limbs[5], limbs[6], limbs[7],
+        )
     }
 }
 

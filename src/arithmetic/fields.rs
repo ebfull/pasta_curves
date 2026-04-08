@@ -256,3 +256,138 @@ pub(crate) const fn mac(a: u64, b: u64, c: u64, carry: u64) -> (u64, u64) {
     let ret = (a as u128) + ((b as u128) * (c as u128)) + (carry as u128);
     (ret as u64, (ret >> 64) as u64)
 }
+
+/// Multiply-accumulate: adds the 4-limb * 4-limb product `a * b` into `dst`
+/// and returns `(dst, carry)`.
+///
+/// When `dst` is `[0; 8]` this computes a fresh 512-bit product (carry = 0).
+/// When `dst` already holds a value, the product is added to it and `carry`
+/// captures any overflow beyond 512 bits.
+///
+/// The structure mirrors the standard schoolbook with one `adc` at the end of
+/// each row to propagate the row carry into the next limb.  Each `adc` also
+/// folds in the overflow from the previous row's `adc`, so the total cost is
+/// 16 `mac` + 4 `adc`.  When `dst` is zero the `adc` calls reduce to simple
+/// moves after inlining (overflow is always 0).
+#[cfg_attr(not(feature = "uninline-portable"), inline)]
+pub(crate) const fn mul_acc(mut dst: [u64; 8], a: &[u64; 4], b: &[u64; 4]) -> ([u64; 8], u64) {
+    // Row 0: a[0] * b[0..3]
+    let (d, carry) = mac(dst[0], a[0], b[0], 0);
+    dst[0] = d;
+    let (d, carry) = mac(dst[1], a[0], b[1], carry);
+    dst[1] = d;
+    let (d, carry) = mac(dst[2], a[0], b[2], carry);
+    dst[2] = d;
+    let (d, carry) = mac(dst[3], a[0], b[3], carry);
+    dst[3] = d;
+    let (d, over) = adc(dst[4], carry, 0);
+    dst[4] = d;
+
+    // Row 1: a[1] * b[0..3]
+    let (d, carry) = mac(dst[1], a[1], b[0], 0);
+    dst[1] = d;
+    let (d, carry) = mac(dst[2], a[1], b[1], carry);
+    dst[2] = d;
+    let (d, carry) = mac(dst[3], a[1], b[2], carry);
+    dst[3] = d;
+    let (d, carry) = mac(dst[4], a[1], b[3], carry);
+    dst[4] = d;
+    let (d, over) = adc(dst[5], carry, over);
+    dst[5] = d;
+
+    // Row 2: a[2] * b[0..3]
+    let (d, carry) = mac(dst[2], a[2], b[0], 0);
+    dst[2] = d;
+    let (d, carry) = mac(dst[3], a[2], b[1], carry);
+    dst[3] = d;
+    let (d, carry) = mac(dst[4], a[2], b[2], carry);
+    dst[4] = d;
+    let (d, carry) = mac(dst[5], a[2], b[3], carry);
+    dst[5] = d;
+    let (d, over) = adc(dst[6], carry, over);
+    dst[6] = d;
+
+    // Row 3: a[3] * b[0..3]
+    let (d, carry) = mac(dst[3], a[3], b[0], 0);
+    dst[3] = d;
+    let (d, carry) = mac(dst[4], a[3], b[1], carry);
+    dst[4] = d;
+    let (d, carry) = mac(dst[5], a[3], b[2], carry);
+    dst[5] = d;
+    let (d, carry) = mac(dst[6], a[3], b[3], carry);
+    dst[6] = d;
+    let (d, over) = adc(dst[7], carry, over);
+    dst[7] = d;
+
+    (dst, over)
+}
+
+/// Square-accumulate: adds `a^2` into `dst` and returns `(dst, carry)`.
+///
+/// When `dst` is `[0; 8]` this computes a fresh 512-bit square (carry = 0).
+/// When `dst` already holds a value, the square is added to it and `carry`
+/// captures any overflow beyond 512 bits.
+///
+/// Uses the optimised squaring strategy: 6 cross-term multiplications,
+/// doubling via shifts, then 4 diagonal multiplications.  The doubled
+/// cross-terms are folded into `dst` before the diagonal pass so that the
+/// diagonal `mac`/`adc` chain operates on the combined value.  When `dst`
+/// is zero the cross-term fold reduces to moves after inlining.
+#[cfg_attr(not(feature = "uninline-portable"), inline)]
+pub(crate) const fn square_acc(mut dst: [u64; 8], a: &[u64; 4]) -> ([u64; 8], u64) {
+    // Cross-terms (into fresh temporaries).
+    let (r1, carry) = mac(0, a[0], a[1], 0);
+    let (r2, carry) = mac(0, a[0], a[2], carry);
+    let (r3, r4) = mac(0, a[0], a[3], carry);
+
+    let (r3, carry) = mac(r3, a[1], a[2], 0);
+    let (r4, r5) = mac(r4, a[1], a[3], carry);
+
+    let (r5, r6) = mac(r5, a[2], a[3], 0);
+
+    // Double the cross-terms.
+    let r7 = r6 >> 63;
+    let r6 = (r6 << 1) | (r5 >> 63);
+    let r5 = (r5 << 1) | (r4 >> 63);
+    let r4 = (r4 << 1) | (r3 >> 63);
+    let r3 = (r3 << 1) | (r2 >> 63);
+    let r2 = (r2 << 1) | (r1 >> 63);
+    let r1 = r1 << 1;
+
+    // Fold doubled cross-terms into dst[1..7].
+    // When dst is zero every adc is a move and over stays 0.
+    let (d, over) = adc(dst[1], r1, 0);
+    dst[1] = d;
+    let (d, over) = adc(dst[2], r2, over);
+    dst[2] = d;
+    let (d, over) = adc(dst[3], r3, over);
+    dst[3] = d;
+    let (d, over) = adc(dst[4], r4, over);
+    dst[4] = d;
+    let (d, over) = adc(dst[5], r5, over);
+    dst[5] = d;
+    let (d, over) = adc(dst[6], r6, over);
+    dst[6] = d;
+    let (d, over) = adc(dst[7], r7, over);
+    dst[7] = d;
+
+    // Add diagonal terms a[i]^2 into dst[2i..2i+1].
+    let (d, carry) = mac(dst[0], a[0], a[0], 0);
+    dst[0] = d;
+    let (d, carry) = adc(dst[1], 0, carry);
+    dst[1] = d;
+    let (d, carry) = mac(dst[2], a[1], a[1], carry);
+    dst[2] = d;
+    let (d, carry) = adc(dst[3], 0, carry);
+    dst[3] = d;
+    let (d, carry) = mac(dst[4], a[2], a[2], carry);
+    dst[4] = d;
+    let (d, carry) = adc(dst[5], 0, carry);
+    dst[5] = d;
+    let (d, carry) = mac(dst[6], a[3], a[3], carry);
+    dst[6] = d;
+    let (d, carry) = adc(dst[7], 0, carry);
+    dst[7] = d;
+
+    (dst, over + carry)
+}
