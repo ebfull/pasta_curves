@@ -71,6 +71,7 @@ gpu = ["alloc", "ec-gpu"]
 sqrt-table = ["alloc", "lazy_static"]
 repr-c = []
 uninline-portable = []
+deferred = []
 serde = ["hex", "serde_crate"]
 
 [patch.crates-io]
