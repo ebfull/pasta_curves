@@ -525,7 +525,7 @@ impl ff::Field for Fp {
     const ZERO: Self = Self::zero();
     const ONE: Self = Self::one();
 
-    fn try_from_rng<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
         Ok(Self::from_u512([
             rng.try_next_u64()?,
             rng.try_next_u64()?,

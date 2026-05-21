@@ -75,10 +75,6 @@ deferred = []
 serde = ["hex", "serde_crate"]
 
 [patch.crates-io]
-ff = { git = "https://github.com/ebfull/ff", branch = "release-0.14.0-with-rand-0.10" }
-group = { git = "https://github.com/ebfull/group", branch = "release-0.14.0-with-rand-0.10" }
-# `ebfull/addchain` branch `bump-num-bigint` is a replica of
-# https://github.com/str4d/addchain/pull/3
-# that updates `addchain` to use `num_bigint 0.4`
-addchain = { git = "https://github.com/ebfull/addchain", rev = "da4099a81bc29c895f3ca0ebcaae21c860494c12" }
+ff = { git = "https://github.com/zkcrypto/ff", rev = "bdd74a3f75c4c378d69e954944a61bb0930532a0" }
+group = { git = "https://github.com/ebfull/group", rev = "3a5c728f27700cf8767e926e2566d6c5cf1879ef" }
 
