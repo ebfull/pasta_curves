@@ -248,8 +248,9 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "ff"
-version = "0.14.0-pre.0"
-source = "git+https://github.com/zkcrypto/ff?rev=bdd74a3f75c4c378d69e954944a61bb0930532a0#bdd74a3f75c4c378d69e954944a61bb0930532a0"
+version = "0.14.0-pre.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d1fa20678d31fcd57b1e146f5ca2c24282428601f45a1002a0d2a54136ef681"
 dependencies = [
  "bitvec",
  "ff_derive",
@@ -259,8 +260,9 @@ dependencies = [
 
 [[package]]
 name = "ff_derive"
-version = "0.14.0-pre.0"
-source = "git+https://github.com/zkcrypto/ff?rev=bdd74a3f75c4c378d69e954944a61bb0930532a0#bdd74a3f75c4c378d69e954944a61bb0930532a0"
+version = "0.14.0-pre.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc58d7ca5bc500948e3ef5837fbbe707a4a9475e24346121ab8f793a14fd0eaf"
 dependencies = [
  "addchain",
  "num-bigint",
@@ -279,8 +281,9 @@ checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
 name = "group"
-version = "0.14.0-pre.0"
-source = "git+https://github.com/ebfull/group?rev=3a5c728f27700cf8767e926e2566d6c5cf1879ef#3a5c728f27700cf8767e926e2566d6c5cf1879ef"
+version = "0.14.0-pre.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d2d58f7caba35039967de2de47857f38cba03e6b173d32fef14412282d49ac9"
 dependencies = [
  "ff",
  "rand_core",
