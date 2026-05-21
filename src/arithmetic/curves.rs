@@ -2,7 +2,10 @@
 //! write code that generalizes over a pair of groups.
 
 #[cfg(feature = "alloc")]
-use group::prime::{PrimeCurve, PrimeCurveAffine};
+use group::{
+    prime::{PrimeCurve, PrimeCurveAffine},
+    Curve as GroupCurve, CurveAffine as GroupCurveAffine,
+};
 #[cfg(feature = "alloc")]
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
@@ -19,12 +22,13 @@ use core::ops::{Add, Mul, Sub};
 #[cfg(feature = "alloc")]
 #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 pub trait CurveExt:
-    PrimeCurve<Affine = <Self as CurveExt>::AffineExt>
+    GroupCurve<Affine = <Self as CurveExt>::AffineExt>
+    + PrimeCurve
     + group::Group<Scalar = <Self as CurveExt>::ScalarExt>
     + Default
     + ConditionallySelectable
     + ConstantTimeEq
-    + From<<Self as PrimeCurve>::Affine>
+    + From<<Self as GroupCurve>::Affine>
 {
     /// The scalar field of this elliptic curve.
     type ScalarExt: ff::WithSmallOrderMulGroup<3>;
@@ -89,15 +93,16 @@ pub trait CurveExt:
 #[cfg(feature = "alloc")]
 #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 pub trait CurveAffine:
-    PrimeCurveAffine<
+    GroupCurveAffine<
         Scalar = <Self as CurveAffine>::ScalarExt,
         Curve = <Self as CurveAffine>::CurveExt,
-    > + Default
-    + Add<Output = <Self as PrimeCurveAffine>::Curve>
-    + Sub<Output = <Self as PrimeCurveAffine>::Curve>
+    > + PrimeCurveAffine
+    + Default
+    + Add<Output = <Self as GroupCurveAffine>::Curve>
+    + Sub<Output = <Self as GroupCurveAffine>::Curve>
     + ConditionallySelectable
     + ConstantTimeEq
-    + From<<Self as PrimeCurveAffine>::Curve>
+    + From<<Self as GroupCurveAffine>::Curve>
 {
     /// The scalar field of this elliptic curve.
     type ScalarExt: ff::WithSmallOrderMulGroup<3> + Ord;
